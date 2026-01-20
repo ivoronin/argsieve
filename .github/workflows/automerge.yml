@@ -1,0 +1,6 @@
+name: automerge
+on:
+  pull_request:
+jobs:
+  automerge:
+    uses: ivoronin/github-workflows/.github/workflows/automerge.yml@main
