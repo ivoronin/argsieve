@@ -1,6 +1,3 @@
-// Package argsieve provides argument parsing with two modes:
-//   - Sift: extracts known flags, passes unknown flags through (for CLI wrappers)
-//   - Parse: strict parsing that errors on unknown flags
 package argsieve
 
 import (
@@ -13,7 +10,14 @@ import (
 	"strings"
 )
 
-// ErrParse indicates a parsing error (e.g., missing value or unknown option).
+// ErrParse indicates a parsing error such as a missing value for a flag
+// that requires one, or (in strict mode) an unknown flag.
+//
+// Use [errors.Is] to check for parsing errors:
+//
+//	if errors.Is(err, argsieve.ErrParse) {
+//	    // Handle parsing error
+//	}
 var ErrParse = errors.New("argument parsing error")
 
 // textUnmarshalerType is used to check if a type implements encoding.TextUnmarshaler.
@@ -35,11 +39,30 @@ type sieve struct {
 	strict      bool
 }
 
-// Sift extracts known flags into target, returning unknown flags and positional args.
-// passthroughWithArg lists unknown flags that take values (e.g., []string{"-o", "-L"}).
+// Sift extracts known flags from args into target, returning unknown flags
+// and positional arguments separately.
+//
+// This is the primary function for CLI wrapper applications. Known flags
+// (those matching struct tags) are parsed into target. Unknown flags are
+// returned in remaining, allowing you to forward them to another command.
+//
+// The passthroughWithArg parameter lists unknown flags that consume a value.
+// Without this hint, an unknown flag's value would be treated as positional.
+//
+// Example:
+//
+//	type Options struct {
+//	    Config string `short:"c" long:"config"`
+//	    Debug  bool   `short:"d"`
+//	}
+//	var opts Options
+//	remaining, positional, err := argsieve.Sift(&opts, os.Args[1:], []string{"-x"})
+//	// opts.Config contains the parsed value
+//	// remaining holds unknown flags like ["-x", "value"]
+//	// positional holds non-flag arguments
 //
 // Panics if target is not a pointer to struct or if any tagged field
-// has a type other than string or bool.
+// has an unsupported type.
 func Sift(target any, args []string, passthroughWithArg []string) (remaining, positional []string, err error) {
 	s := &sieve{
 		fields:      make(map[string]fieldInfo),
@@ -55,11 +78,25 @@ func Sift(target any, args []string, passthroughWithArg []string) (remaining, po
 	return s.parse(args)
 }
 
-// Parse parses args into target, returning positional args.
-// Returns error if unknown flags are encountered.
+// Parse parses args into target in strict mode, returning only positional arguments.
+//
+// Unlike [Sift], Parse returns an error if any unknown flags are encountered.
+// Use this for standalone CLI tools where all flags should be defined.
+//
+// Example:
+//
+//	type Options struct {
+//	    Output  string `short:"o" long:"output"`
+//	    Verbose bool   `short:"v"`
+//	}
+//	var opts Options
+//	positional, err := argsieve.Parse(&opts, os.Args[1:])
+//	if errors.Is(err, argsieve.ErrParse) {
+//	    // Handle unknown flag or missing value
+//	}
 //
 // Panics if target is not a pointer to struct or if any tagged field
-// has a type other than string or bool.
+// has an unsupported type.
 func Parse(target any, args []string) (positional []string, err error) {
 	s := &sieve{
 		fields:      make(map[string]fieldInfo),
