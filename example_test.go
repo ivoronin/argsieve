@@ -1,6 +1,7 @@
 package argsieve_test
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/ivoronin/argsieve"
@@ -92,6 +93,56 @@ func ExampleParse() {
 	// Output: result.txt
 	// Force: true
 	// Files: [input.txt]
+}
+
+func ExampleParse_errorHandling() {
+	type Options struct {
+		Output string `short:"o" long:"output"`
+	}
+
+	var opts Options
+	args := []string{"--unknown-flag"}
+
+	_, err := argsieve.Parse(&opts, args, nil)
+	if errors.Is(err, argsieve.ErrParse) {
+		fmt.Println("Parse error:", err)
+	}
+	// Output:
+	// Parse error: argument parsing error: unknown option --unknown-flag
+}
+
+// LogLevel demonstrates encoding.TextUnmarshaler for custom flag types.
+type LogLevel string
+
+func (l *LogLevel) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case "info", "debug", "error":
+		*l = LogLevel(text)
+	default:
+		return fmt.Errorf("unknown log level: %q", text)
+	}
+	return nil
+}
+
+func ExampleParse_textUnmarshaler() {
+	type Options struct {
+		Level   LogLevel `short:"l" long:"level"`
+		Verbose bool     `short:"v"`
+	}
+
+	var opts Options
+	args := []string{"-v", "--level", "debug"}
+
+	_, err := argsieve.Parse(&opts, args, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("Level: %s\n", opts.Level)
+	fmt.Printf("Verbose: %t\n", opts.Verbose)
+	// Output:
+	// Level: debug
+	// Verbose: true
 }
 
 func ExampleSift_chainedFlags() {
