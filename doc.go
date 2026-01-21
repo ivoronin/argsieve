@@ -43,14 +43,14 @@
 //
 // # Supported Flag Formats
 //
-//   - Short flags: `-v`, `-r value`, `-rvalue`, `-vdr` (chained bools)
-//   - Long flags: `--verbose`, `--region value`, `--region=value`
-//   - Terminator: `--` (everything after is positional)
+//   - Short flags: -v, -r value, -rvalue, -vdr (chained bools)
+//   - Long flags: --verbose, --region value, --region=value
+//   - Terminator: -- (everything after is positional)
 //
 // # Supported Field Types
 //
-//   - `bool`: flag presence sets true (no value required)
-//   - `string`: requires a value
+//   - bool: flag presence sets true (no value required)
+//   - string: requires a value
 //   - [encoding.TextUnmarshaler]: custom parsing (pointer types are nil when absent)
 //
 // # Embedded Structs
