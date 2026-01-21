@@ -23,6 +23,15 @@ var ErrParse = errors.New("argument parsing error")
 // textUnmarshalerType is used to check if a type implements encoding.TextUnmarshaler.
 var textUnmarshalerType = reflect.TypeOf((*encoding.TextUnmarshaler)(nil)).Elem()
 
+// Config holds optional settings for argument parsing.
+// Pass nil to use defaults.
+type Config struct {
+	// RequirePositionalDelimiter when true requires all positional arguments
+	// to appear after the "--" delimiter. Positional arguments before "--"
+	// will cause a parse error.
+	RequirePositionalDelimiter bool
+}
+
 // fieldInfo holds a reference to a struct field and whether it needs an argument.
 type fieldInfo struct {
 	field    reflect.Value
@@ -32,11 +41,13 @@ type fieldInfo struct {
 
 // sieve separates known flags from unknown flags and positional arguments.
 type sieve struct {
-	fields      map[string]fieldInfo // flag name → field info
-	passthrough map[string]struct{}
-	remaining   []string
-	positional  []string
-	strict      bool
+	fields                     map[string]fieldInfo // flag name → field info
+	passthrough                map[string]struct{}
+	remaining                  []string
+	positional                 []string
+	strict                     bool
+	requirePositionalDelimiter bool
+	delimiterSeen              bool
 }
 
 // Sift extracts known flags from args into target, returning unknown flags
@@ -49,6 +60,10 @@ type sieve struct {
 // The passthroughWithArg parameter lists unknown flags that consume a value.
 // Without this hint, an unknown flag's value would be treated as positional.
 //
+// The cfg parameter allows optional configuration. Pass nil to use defaults.
+// When cfg.RequirePositionalDelimiter is true, positional arguments must
+// appear after the "--" delimiter or an error is returned.
+//
 // Example:
 //
 //	type Options struct {
@@ -56,17 +71,21 @@ type sieve struct {
 //	    Debug  bool   `short:"d"`
 //	}
 //	var opts Options
-//	remaining, positional, err := argsieve.Sift(&opts, os.Args[1:], []string{"-x"})
+//	remaining, positional, err := argsieve.Sift(&opts, os.Args[1:], []string{"-x"}, nil)
 //	// opts.Config contains the parsed value
 //	// remaining holds unknown flags like ["-x", "value"]
 //	// positional holds non-flag arguments
 //
 // Panics if target is not a pointer to struct or if any tagged field
 // has an unsupported type.
-func Sift(target any, args []string, passthroughWithArg []string) (remaining, positional []string, err error) {
+func Sift(target any, args []string, passthroughWithArg []string, cfg *Config) (remaining, positional []string, err error) {
 	s := &sieve{
 		fields:      make(map[string]fieldInfo),
 		passthrough: make(map[string]struct{}),
+	}
+
+	if cfg != nil {
+		s.requirePositionalDelimiter = cfg.RequirePositionalDelimiter
 	}
 
 	s.extractFields(target)
@@ -83,6 +102,10 @@ func Sift(target any, args []string, passthroughWithArg []string) (remaining, po
 // Unlike [Sift], Parse returns an error if any unknown flags are encountered.
 // Use this for standalone CLI tools where all flags should be defined.
 //
+// The cfg parameter allows optional configuration. Pass nil to use defaults.
+// When cfg.RequirePositionalDelimiter is true, positional arguments must
+// appear after the "--" delimiter or an error is returned.
+//
 // Example:
 //
 //	type Options struct {
@@ -90,18 +113,22 @@ func Sift(target any, args []string, passthroughWithArg []string) (remaining, po
 //	    Verbose bool   `short:"v"`
 //	}
 //	var opts Options
-//	positional, err := argsieve.Parse(&opts, os.Args[1:])
+//	positional, err := argsieve.Parse(&opts, os.Args[1:], nil)
 //	if errors.Is(err, argsieve.ErrParse) {
 //	    // Handle unknown flag or missing value
 //	}
 //
 // Panics if target is not a pointer to struct or if any tagged field
 // has an unsupported type.
-func Parse(target any, args []string) (positional []string, err error) {
+func Parse(target any, args []string, cfg *Config) (positional []string, err error) {
 	s := &sieve{
 		fields:      make(map[string]fieldInfo),
 		passthrough: make(map[string]struct{}),
 		strict:      true,
+	}
+
+	if cfg != nil {
+		s.requirePositionalDelimiter = cfg.RequirePositionalDelimiter
 	}
 
 	s.extractFields(target)
@@ -366,6 +393,7 @@ func (s *sieve) parse(args []string) (remaining, positional []string, err error)
 	for arg, ok := next(); ok; arg, ok = next() {
 		switch {
 		case arg == "--":
+			s.delimiterSeen = true
 			// Drain remaining args as positional (don't pass "--" through)
 			for arg, ok := next(); ok; arg, ok = next() {
 				s.addPositional(arg)
@@ -382,6 +410,9 @@ func (s *sieve) parse(args []string) (remaining, positional []string, err error)
 			}
 
 		default:
+			if s.requirePositionalDelimiter && !s.delimiterSeen {
+				return nil, nil, fmt.Errorf("%w: positional argument %q not allowed before \"--\" delimiter", ErrParse, arg)
+			}
 			s.addPositional(arg)
 		}
 	}

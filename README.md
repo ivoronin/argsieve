@@ -22,10 +22,26 @@ type Options struct {
 var opts Options
 
 // Sift: extract known flags, pass through unknown
-remaining, positional, err := argsieve.Sift(&opts, os.Args[1:], []string{"-o"})
+remaining, positional, err := argsieve.Sift(&opts, os.Args[1:], []string{"-o"}, nil)
 
 // Parse: strict mode, error on unknown flags
-positional, err := argsieve.Parse(&opts, os.Args[1:])
+positional, err := argsieve.Parse(&opts, os.Args[1:], nil)
+```
+
+## Configuration
+
+Both `Sift` and `Parse` accept an optional `*Config` parameter (pass `nil` for defaults).
+
+### RequirePositionalDelimiter
+
+Require all positional arguments to appear after `--`:
+
+```go
+cfg := &argsieve.Config{RequirePositionalDelimiter: true}
+positional, err := argsieve.Parse(&opts, os.Args[1:], cfg)
+
+// "-v filename"     → error: positional before "--"
+// "-v -- filename"  → OK: positional after delimiter
 ```
 
 See [pkg.go.dev](https://pkg.go.dev/github.com/ivoronin/argsieve) for full API documentation.

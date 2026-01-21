@@ -12,6 +12,19 @@
 // [Parse] is strict mode that errors on any unknown flag - use this when
 // building standalone CLI tools.
 //
+// # Configuration
+//
+// Both [Sift] and [Parse] accept an optional [Config] parameter. Pass nil
+// to use defaults.
+//
+// Use [Config.RequirePositionalDelimiter] to require that all positional
+// arguments appear after the "--" delimiter:
+//
+//	cfg := &argsieve.Config{RequirePositionalDelimiter: true}
+//	positional, err := argsieve.Parse(&opts, args, cfg)
+//	// "-v filename" → error: positional before "--"
+//	// "-v -- filename" → OK: positional after delimiter
+//
 // # Struct Tags
 //
 // Define flags using struct tags:

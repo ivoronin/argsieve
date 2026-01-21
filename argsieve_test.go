@@ -165,7 +165,7 @@ func TestSift(t *testing.T) {
 			t.Parallel()
 
 			var flags testFlags
-			remaining, positional, err := Sift(&flags, tc.args, tc.passthroughWithArg)
+			remaining, positional, err := Sift(&flags, tc.args, tc.passthroughWithArg, nil)
 
 			if tc.wantErr {
 				require.Error(t, err)
@@ -238,7 +238,7 @@ func TestParse(t *testing.T) {
 			t.Parallel()
 
 			var flags testFlags
-			positional, err := Parse(&flags, tc.args)
+			positional, err := Parse(&flags, tc.args, nil)
 
 			if tc.wantErr {
 				require.Error(t, err)
@@ -262,7 +262,7 @@ func TestSift_EmbeddedStruct(t *testing.T) {
 	t.Parallel()
 
 	var flags testEmbedded
-	_, _, err := Sift(&flags, []string{"-r", "us-west-2", "-p", "myprofile"}, nil)
+	_, _, err := Sift(&flags, []string{"-r", "us-west-2", "-p", "myprofile"}, nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "us-west-2", flags.Region)
@@ -285,7 +285,7 @@ func TestSift_PanicsOnInvalidTarget(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			assert.Panics(t, func() {
-				_, _, _ = Sift(tc.target, []string{}, nil)
+				_, _, _ = Sift(tc.target, []string{}, nil, nil)
 			})
 		})
 	}
@@ -300,7 +300,7 @@ func TestSift_PanicsOnUnsupportedFieldType(t *testing.T) {
 
 	assert.Panics(t, func() {
 		var flags badStruct
-		_, _, _ = Sift(&flags, []string{}, nil)
+		_, _, _ = Sift(&flags, []string{}, nil, nil)
 	})
 }
 
@@ -318,7 +318,7 @@ func TestParse_PanicsOnInvalidTarget(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			assert.Panics(t, func() {
-				_, _ = Parse(tc.target, []string{})
+				_, _ = Parse(tc.target, []string{}, nil)
 			})
 		})
 	}
@@ -328,7 +328,7 @@ func TestSift_LongFlagEqualsEmptyValue(t *testing.T) {
 	t.Parallel()
 
 	var flags testFlags
-	_, _, err := Sift(&flags, []string{"--region="}, nil)
+	_, _, err := Sift(&flags, []string{"--region="}, nil, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "", flags.Region)
@@ -341,6 +341,7 @@ func TestSift_ComplexPassthrough(t *testing.T) {
 	remaining, positional, err := Sift(&flags,
 		[]string{"-v", "-o", "opt1", "-L", "8080:localhost:80", "--region", "us-west-2", "host"},
 		[]string{"-o", "-L"},
+		nil,
 	)
 
 	require.NoError(t, err)
@@ -437,7 +438,7 @@ func TestSift_TextUnmarshaler(t *testing.T) {
 			t.Parallel()
 
 			var flags customFlags
-			_, _, err := Sift(&flags, tc.args, nil)
+			_, _, err := Sift(&flags, tc.args, nil, nil)
 
 			if tc.wantErr {
 				require.Error(t, err)
@@ -481,7 +482,7 @@ func TestParse_TextUnmarshaler(t *testing.T) {
 			t.Parallel()
 
 			var flags customFlags
-			_, err := Parse(&flags, tc.args)
+			_, err := Parse(&flags, tc.args, nil)
 
 			if tc.wantErr {
 				require.Error(t, err)
@@ -526,7 +527,7 @@ func TestSift_PointerToTextUnmarshaler(t *testing.T) {
 			t.Parallel()
 
 			var flags pointerFlags
-			_, _, err := Sift(&flags, tc.args, nil)
+			_, _, err := Sift(&flags, tc.args, nil, nil)
 			require.NoError(t, err)
 
 			if tc.wantNil {
@@ -575,7 +576,7 @@ func TestParse_PointerToTextUnmarshaler(t *testing.T) {
 			t.Parallel()
 
 			var flags pointerFlags
-			_, err := Parse(&flags, tc.args)
+			_, err := Parse(&flags, tc.args, nil)
 
 			if tc.wantErr {
 				require.Error(t, err)
@@ -608,7 +609,7 @@ func TestSift_PanicsOnUnsupportedPointerType(t *testing.T) {
 
 	assert.Panics(t, func() {
 		var flags badStruct
-		_, _, _ = Sift(&flags, []string{}, nil)
+		_, _, _ = Sift(&flags, []string{}, nil, nil)
 	})
 }
 
@@ -622,7 +623,7 @@ func TestParse_PanicsOnUnsupportedPointerType(t *testing.T) {
 
 	assert.Panics(t, func() {
 		var flags badStruct
-		_, _ = Parse(&flags, []string{})
+		_, _ = Parse(&flags, []string{}, nil)
 	})
 }
 
@@ -662,7 +663,7 @@ func TestParse_PointerEmptyStringRejection(t *testing.T) {
 			t.Parallel()
 
 			var flags strictFlags
-			_, err := Parse(&flags, tc.args)
+			_, err := Parse(&flags, tc.args, nil)
 
 			if tc.wantErr {
 				require.Error(t, err)
@@ -670,6 +671,143 @@ func TestParse_PointerEmptyStringRejection(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
+		})
+	}
+}
+
+func TestParse_RequirePositionalDelimiter(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		args           []string
+		wantPositional []string
+		wantVerbose    bool
+		wantErr        bool
+		errContains    string
+	}{
+		"positional before delimiter rejected": {
+			args:        []string{"-v", "filename"},
+			wantErr:     true,
+			errContains: `positional argument "filename" not allowed before "--" delimiter`,
+		},
+		"positional after delimiter allowed": {
+			args:           []string{"-v", "--", "filename"},
+			wantVerbose:    true,
+			wantPositional: []string{"filename"},
+		},
+		"single dash before delimiter rejected": {
+			args:        []string{"-v", "-"},
+			wantErr:     true,
+			errContains: `positional argument "-" not allowed before "--" delimiter`,
+		},
+		"single dash after delimiter allowed": {
+			args:           []string{"-v", "--", "-"},
+			wantVerbose:    true,
+			wantPositional: []string{"-"},
+		},
+		"no positionals is fine": {
+			args:        []string{"-v"},
+			wantVerbose: true,
+		},
+		"everything after delimiter is positional": {
+			args:           []string{"--", "-v", "filename"},
+			wantPositional: []string{"-v", "filename"},
+		},
+		"multiple positionals after delimiter": {
+			args:           []string{"-v", "--", "file1", "file2", "file3"},
+			wantVerbose:    true,
+			wantPositional: []string{"file1", "file2", "file3"},
+		},
+		"empty args": {
+			args: []string{},
+		},
+		"only delimiter": {
+			args: []string{"--"},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var flags testFlags
+			cfg := &Config{RequirePositionalDelimiter: true}
+			positional, err := Parse(&flags, tc.args, cfg)
+
+			if tc.wantErr {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, ErrParse)
+				if tc.errContains != "" {
+					assert.Contains(t, err.Error(), tc.errContains)
+				}
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantPositional, positional)
+			assert.Equal(t, tc.wantVerbose, flags.Verbose)
+		})
+	}
+}
+
+func TestSift_RequirePositionalDelimiter(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		args               []string
+		passthroughWithArg []string
+		wantRemaining      []string
+		wantPositional     []string
+		wantVerbose        bool
+		wantErr            bool
+		errContains        string
+	}{
+		"positional before delimiter rejected": {
+			args:        []string{"-v", "filename"},
+			wantErr:     true,
+			errContains: `positional argument "filename" not allowed before "--" delimiter`,
+		},
+		"positional after delimiter allowed": {
+			args:           []string{"-v", "--", "filename"},
+			wantVerbose:    true,
+			wantPositional: []string{"filename"},
+		},
+		"unknown flags still pass through": {
+			args:           []string{"-v", "-x", "--", "filename"},
+			wantVerbose:    true,
+			wantRemaining:  []string{"-x"},
+			wantPositional: []string{"filename"},
+		},
+		"passthrough with arg works": {
+			args:               []string{"-v", "-o", "value", "--", "filename"},
+			passthroughWithArg: []string{"-o"},
+			wantVerbose:        true,
+			wantRemaining:      []string{"-o", "value"},
+			wantPositional:     []string{"filename"},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var flags testFlags
+			cfg := &Config{RequirePositionalDelimiter: true}
+			remaining, positional, err := Sift(&flags, tc.args, tc.passthroughWithArg, cfg)
+
+			if tc.wantErr {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, ErrParse)
+				if tc.errContains != "" {
+					assert.Contains(t, err.Error(), tc.errContains)
+				}
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantRemaining, remaining, "remaining")
+			assert.Equal(t, tc.wantPositional, positional, "positional")
+			assert.Equal(t, tc.wantVerbose, flags.Verbose, "verbose")
 		})
 	}
 }

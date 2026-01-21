@@ -15,7 +15,7 @@ func Example() {
 	var opts Options
 	args := []string{"-v", "--config", "app.yaml", "file1.txt", "file2.txt"}
 
-	remaining, positional, err := argsieve.Sift(&opts, args, nil)
+	remaining, positional, err := argsieve.Sift(&opts, args, nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -40,7 +40,7 @@ func ExampleSift() {
 	args := []string{"-c", "app.yaml", "-x", "extra-value", "target"}
 
 	// -x takes a value, so list it in passthroughWithArg
-	remaining, positional, _ := argsieve.Sift(&opts, args, []string{"-x"})
+	remaining, positional, _ := argsieve.Sift(&opts, args, []string{"-x"}, nil)
 
 	fmt.Printf("Config: %s\n", opts.Config)
 	fmt.Printf("Passthrough: %v\n", remaining)
@@ -60,7 +60,7 @@ func ExampleSift_passthrough() {
 	args := []string{"-d", "-L", "8080:localhost:80", "--unknown", "value", "target"}
 
 	// List flags that consume values so they're captured correctly
-	remaining, positional, _ := argsieve.Sift(&opts, args, []string{"-L", "--unknown"})
+	remaining, positional, _ := argsieve.Sift(&opts, args, []string{"-L", "--unknown"}, nil)
 
 	fmt.Printf("Debug: %t\n", opts.Debug)
 	fmt.Printf("Passthrough: %v\n", remaining)
@@ -80,7 +80,7 @@ func ExampleParse() {
 	var opts Options
 	args := []string{"-f", "--output", "result.txt", "input.txt"}
 
-	positional, err := argsieve.Parse(&opts, args)
+	positional, err := argsieve.Parse(&opts, args, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -105,9 +105,33 @@ func ExampleSift_chainedFlags() {
 	// -vdl combines -v, -d, and -l with attached value
 	args := []string{"-vdlinfo"}
 
-	argsieve.Sift(&opts, args, nil)
+	if _, _, err := argsieve.Sift(&opts, args, nil, nil); err != nil {
+		panic(err)
+	}
 
 	fmt.Printf("Verbose: %t, Debug: %t, Level: %s\n", opts.Verbose, opts.Debug, opts.Level)
 	// Output:
 	// Verbose: true, Debug: true, Level: info
+}
+
+func ExampleConfig_requirePositionalDelimiter() {
+	type Options struct {
+		Verbose bool `short:"v" long:"verbose"`
+	}
+
+	var opts Options
+	// With RequirePositionalDelimiter, positionals must come after "--"
+	args := []string{"-v", "--", "file1.txt", "file2.txt"}
+
+	cfg := &argsieve.Config{RequirePositionalDelimiter: true}
+	positional, err := argsieve.Parse(&opts, args, cfg)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("Verbose: %t\n", opts.Verbose)
+	fmt.Printf("Files: %v\n", positional)
+	// Output:
+	// Verbose: true
+	// Files: [file1.txt file2.txt]
 }
