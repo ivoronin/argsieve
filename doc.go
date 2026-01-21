@@ -25,6 +25,13 @@
 //	// "-v filename" → error: positional before "--"
 //	// "-v -- filename" → OK: positional after delimiter
 //
+// Use [Config.StopAtFirstPositional] to stop flag parsing at the first
+// positional argument (POSIX-style):
+//
+//	cfg := &argsieve.Config{StopAtFirstPositional: true}
+//	positional, err := argsieve.Parse(&opts, args, cfg)
+//	// "-v file -d" → -v parsed, ["file", "-d"] are positional
+//
 // # Struct Tags
 //
 // Define flags using struct tags:

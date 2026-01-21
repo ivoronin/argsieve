@@ -186,3 +186,25 @@ func ExampleConfig_requirePositionalDelimiter() {
 	// Verbose: true
 	// Files: [file1.txt file2.txt]
 }
+
+func ExampleConfig_stopAtFirstPositional() {
+	type Options struct {
+		Verbose bool `short:"v" long:"verbose"`
+	}
+
+	var opts Options
+	// With StopAtFirstPositional, flags after "cmd" become positional
+	args := []string{"-v", "cmd", "-x", "--flag"}
+
+	cfg := &argsieve.Config{StopAtFirstPositional: true}
+	positional, err := argsieve.Parse(&opts, args, cfg)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("Verbose: %t\n", opts.Verbose)
+	fmt.Printf("Positional: %v\n", positional)
+	// Output:
+	// Verbose: true
+	// Positional: [cmd -x --flag]
+}

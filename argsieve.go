@@ -30,6 +30,11 @@ type Config struct {
 	// to appear after the "--" delimiter. Positional arguments before "--"
 	// will cause a parse error.
 	RequirePositionalDelimiter bool
+
+	// StopAtFirstPositional when true stops flag parsing at the first
+	// positional argument. All subsequent arguments are treated as positional,
+	// even if they look like flags.
+	StopAtFirstPositional bool
 }
 
 // fieldInfo holds a reference to a struct field and whether it needs an argument.
@@ -47,6 +52,7 @@ type sieve struct {
 	positional                 []string
 	strict                     bool
 	requirePositionalDelimiter bool
+	stopAtFirstPositional      bool
 	delimiterSeen              bool
 }
 
@@ -86,6 +92,7 @@ func Sift(target any, args []string, passthroughWithArg []string, cfg *Config) (
 
 	if cfg != nil {
 		s.requirePositionalDelimiter = cfg.RequirePositionalDelimiter
+		s.stopAtFirstPositional = cfg.StopAtFirstPositional
 	}
 
 	s.extractFields(target)
@@ -129,6 +136,7 @@ func Parse(target any, args []string, cfg *Config) (positional []string, err err
 
 	if cfg != nil {
 		s.requirePositionalDelimiter = cfg.RequirePositionalDelimiter
+		s.stopAtFirstPositional = cfg.StopAtFirstPositional
 	}
 
 	s.extractFields(target)
@@ -414,6 +422,12 @@ func (s *sieve) parse(args []string) (remaining, positional []string, err error)
 				return nil, nil, fmt.Errorf("%w: positional argument %q not allowed before \"--\" delimiter", ErrParse, arg)
 			}
 			s.addPositional(arg)
+			if s.stopAtFirstPositional {
+				// Drain remaining args as positional
+				for arg, ok := next(); ok; arg, ok = next() {
+					s.addPositional(arg)
+				}
+			}
 		}
 	}
 

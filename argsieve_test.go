@@ -811,3 +811,109 @@ func TestSift_RequirePositionalDelimiter(t *testing.T) {
 		})
 	}
 }
+
+func TestParse_StopAtFirstPositional(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		args           []string
+		wantPositional []string
+		wantVerbose    bool
+		wantRegion     string
+	}{
+		"flags after positional become positional": {
+			args:           []string{"-v", "file", "-r", "us-west-2"},
+			wantVerbose:    true,
+			wantPositional: []string{"file", "-r", "us-west-2"},
+		},
+		"all flags before positional parsed": {
+			args:           []string{"-v", "-r", "us-west-2", "file"},
+			wantVerbose:    true,
+			wantRegion:     "us-west-2",
+			wantPositional: []string{"file"},
+		},
+		"no positionals": {
+			args:        []string{"-v", "-r", "us-west-2"},
+			wantVerbose: true,
+			wantRegion:  "us-west-2",
+		},
+		"only positionals": {
+			args:           []string{"file1", "file2", "-v"},
+			wantPositional: []string{"file1", "file2", "-v"},
+		},
+		"single dash stops parsing": {
+			args:           []string{"-v", "-", "-r", "us-west-2"},
+			wantVerbose:    true,
+			wantPositional: []string{"-", "-r", "us-west-2"},
+		},
+		"double dash still works": {
+			args:           []string{"-v", "--", "-r", "us-west-2"},
+			wantVerbose:    true,
+			wantPositional: []string{"-r", "us-west-2"},
+		},
+		"empty args": {
+			args: []string{},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var flags testFlags
+			cfg := &Config{StopAtFirstPositional: true}
+			positional, err := Parse(&flags, tc.args, cfg)
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantPositional, positional)
+			assert.Equal(t, tc.wantVerbose, flags.Verbose)
+			assert.Equal(t, tc.wantRegion, flags.Region)
+		})
+	}
+}
+
+func TestSift_StopAtFirstPositional(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		args               []string
+		passthroughWithArg []string
+		wantRemaining      []string
+		wantPositional     []string
+		wantVerbose        bool
+	}{
+		"unknown flags after positional become positional": {
+			args:           []string{"-v", "file", "-x", "value"},
+			wantVerbose:    true,
+			wantPositional: []string{"file", "-x", "value"},
+		},
+		"unknown flags before positional pass through": {
+			args:           []string{"-v", "-x", "file", "-y"},
+			wantVerbose:    true,
+			wantRemaining:  []string{"-x"},
+			wantPositional: []string{"file", "-y"},
+		},
+		"passthrough with arg before positional": {
+			args:               []string{"-v", "-o", "out.txt", "file", "-x"},
+			passthroughWithArg: []string{"-o"},
+			wantVerbose:        true,
+			wantRemaining:      []string{"-o", "out.txt"},
+			wantPositional:     []string{"file", "-x"},
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			var flags testFlags
+			cfg := &Config{StopAtFirstPositional: true}
+			remaining, positional, err := Sift(&flags, tc.args, tc.passthroughWithArg, cfg)
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantRemaining, remaining, "remaining")
+			assert.Equal(t, tc.wantPositional, positional, "positional")
+			assert.Equal(t, tc.wantVerbose, flags.Verbose, "verbose")
+		})
+	}
+}
