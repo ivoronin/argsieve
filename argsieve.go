@@ -317,15 +317,29 @@ func (s *sieve) handleShort(arg string, next func() (string, bool)) error {
 
 		info, known := s.fields[flag]
 
-		// Handle unknown flag first (guard clause)
+		// Unknown flag - check passthrough list or pass through as boolean
 		if !known {
-			if err := s.handleUnknownShort(flag, tail, next); err != nil {
-				return err
+			if s.strict {
+				return fmt.Errorf("%w: unknown option -%s", ErrParse, flag)
 			}
 
-			if len(tail) > 0 {
-				return nil // tail consumed by passthrough
+			prefixedFlag := "-" + flag
+
+			if _, ok := s.passthrough[prefixedFlag]; ok {
+				if len(tail) > 0 {
+					s.addRemaining("-" + flag + tail)
+
+					return nil // tail consumed as passthrough value
+				}
+
+				if value, ok := next(); ok {
+					s.addRemaining(prefixedFlag, value)
+
+					continue
+				}
 			}
+
+			s.addRemaining(prefixedFlag)
 
 			continue
 		}
@@ -360,34 +374,6 @@ func (s *sieve) handleShort(arg string, next func() (string, bool)) error {
 
 		return nil
 	}
-
-	return nil
-}
-
-// handleUnknownShort handles unknown short flags, checking passthrough list.
-func (s *sieve) handleUnknownShort(flag, tail string, next func() (string, bool)) error {
-	if s.strict {
-		return fmt.Errorf("%w: unknown option -%s", ErrParse, flag)
-	}
-
-	prefixedFlag := "-" + flag
-	_, isPassthrough := s.passthrough[prefixedFlag]
-
-	if isPassthrough {
-		if len(tail) > 0 {
-			s.addRemaining("-" + flag + tail)
-
-			return nil
-		}
-
-		if value, ok := next(); ok {
-			s.addRemaining(prefixedFlag, value)
-
-			return nil
-		}
-	}
-
-	s.addRemaining(prefixedFlag)
 
 	return nil
 }

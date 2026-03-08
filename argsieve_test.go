@@ -148,6 +148,28 @@ func TestSift(t *testing.T) {
 			wantRemaining:  []string{"-x", "--unknown"},
 			wantPositional: []string{"host"},
 		},
+		// Combined unknown short flags
+		"combined unknown short flags": {
+			args:          []string{"-fc"},
+			wantRemaining: []string{"-f", "-c"},
+		},
+		// Combined unknown short flags with three flags
+		"combined unknown short flags triple": {
+			args:          []string{"-fce"},
+			wantRemaining: []string{"-f", "-c", "-e"},
+		},
+		// Combined unknown then known bool
+		"combined unknown then known bool": {
+			args:          []string{"-fv"},
+			wantRemaining: []string{"-f"},
+			wantVerbose:   true,
+		},
+		// Combined unknown then known with value
+		"combined unknown then known with value": {
+			args:          []string{"-frus-west-2"},
+			wantRemaining: []string{"-f"},
+			wantRegion:    "us-west-2",
+		},
 		// Missing value for short flag
 		"missing value for short flag": {
 			args:    []string{"-r"},
